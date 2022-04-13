@@ -1,4 +1,5 @@
-﻿using System.Reflection;
+﻿using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 using UnityEditor;
 
@@ -52,7 +53,11 @@ namespace ToolKits
         void OnDisable()
         {
             preview.OnDestroy();
-            //DestroyImmediate(baseEditor);
+            if (null != baseEditor&& IsPreviewCacheNotNull)
+            {
+                DestroyImmediate(baseEditor);
+                baseEditor = null;
+            }
         }
 
         private bool HasParticleSystemPreview()
@@ -148,10 +153,23 @@ namespace ToolKits
             }
         }
 
-        /// <summary>
-        /// 需要调用 GameObjectInspector 的场景拖曳，否则无法拖动物体到 Scene 视图
-        /// </summary>
-        /// <param name="sceneView"></param>
+#if UNITY_2020_2_OR_NEWER        
+        public void OnSceneDrag(SceneView sceneView, int index)
+        {
+            System.Type t = baseEditor.GetType();
+            MethodInfo onSceneDragMi = t.GetMethod("OnSceneDrag",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (onSceneDragMi != null)
+            {
+                object[] param = new object[] {sceneView, index};
+                onSceneDragMi.Invoke(baseEditor, param);
+            }
+        }
+#else
+        // /// <summary>
+        // /// 需要调用 GameObjectInspector 的场景拖曳，否则无法拖动物体到 Scene 视图
+        // /// </summary>
+        // /// <param name="sceneView"></param>
         public void OnSceneDrag(SceneView sceneView)
         {
             System.Type t = baseEditor.GetType();
@@ -160,6 +178,23 @@ namespace ToolKits
             if (onSceneDragMi != null)
             {
                 onSceneDragMi.Invoke(baseEditor, new object[1] {sceneView});
+            }
+        }
+#endif
+
+        private bool IsPreviewCacheNotNull
+        {
+            get
+            {
+                System.Type t = baseEditor.GetType();
+                var fieldInfo = t.GetField("m_PreviewCache", BindingFlags.NonPublic | BindingFlags.Instance);
+                if (null != fieldInfo)
+                {
+                    var value = fieldInfo.GetValue(baseEditor);
+                    return null != value;
+                }
+
+                return false;
             }
         }
     }
